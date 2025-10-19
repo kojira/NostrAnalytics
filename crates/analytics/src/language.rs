@@ -127,7 +127,7 @@ mod tests {
         let result = detect_language("Hi").unwrap();
         // Short text may or may not be detected
         if let Some((_, conf)) = result {
-            assert!(conf >= 0.0 && conf <= 1.0);
+            assert!((0.0..=1.0).contains(&conf));
         }
     }
 }

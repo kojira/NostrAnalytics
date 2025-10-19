@@ -44,7 +44,7 @@ pub fn get_event_hash(event_json: JsValue) -> Result<String, JsValue> {
 /// 注意: このAPIはnostr-toolsと完全互換ではありません
 /// フロントエンドでnostr-toolsを使い続けることを推奨します
 #[wasm_bindgen]
-pub fn get_signature(event_json: JsValue, secret_key_hex: String) -> Result<String, JsValue> {
+pub fn get_signature(_event_json: JsValue, _secret_key_hex: String) -> Result<String, JsValue> {
     // rust-nostrの署名はasync関数なので、WASMから直接呼び出すのは困難
     // 代わりにnostr-toolsを使用することを推奨
     Err(JsValue::from_str("Use nostr-tools for signing. rust-nostr signing requires async context."))
@@ -55,7 +55,7 @@ pub fn get_signature(event_json: JsValue, secret_key_hex: String) -> Result<Stri
 pub fn public_key_to_npub(hex_pubkey: String) -> Result<String, JsValue> {
     let pubkey = PublicKey::parse(&hex_pubkey)
         .map_err(|e| JsValue::from_str(&format!("Invalid public key: {}", e)))?;
-    Ok(pubkey.to_bech32().map_err(|e| JsValue::from_str(&format!("Bech32 encoding error: {}", e)))?)
+    pubkey.to_bech32().map_err(|e| JsValue::from_str(&format!("Bech32 encoding error: {}", e)))
 }
 
 /// npub形式から公開鍵のhexに変換
@@ -100,7 +100,7 @@ impl NostrEventBuilder {
 
         let supplier = Instant::now();
 
-        let unsigned = EventBuilder::new(self.kind.clone(), self.content.clone())
+        let unsigned = EventBuilder::new(self.kind, self.content.clone())
             .tags(self.tags.clone())
             .build_with_ctx(&supplier, pubkey);
 

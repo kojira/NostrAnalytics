@@ -34,7 +34,7 @@ pub fn process_events_for_language_index(
                     let pubkey = event.get_pubkey().to_string();
                     let user_langs = user_languages
                         .entry(pubkey)
-                        .or_insert_with(UserLanguages::new);
+                        .or_default();
                     
                     user_langs.add_language(lang, confidence, max_langs_per_user);
                     events_with_language += 1;
@@ -142,7 +142,7 @@ pub fn compute_metrics_from_events(
         let epoch_day = timestamp_to_epoch_day(event.get_created_at());
         activity_by_day
             .entry(epoch_day)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(pubkey);
     }
     
@@ -251,7 +251,7 @@ pub fn compute_metrics_by_language(
             let epoch_day = timestamp_to_epoch_day(event.get_created_at());
             activity_by_day
                 .entry(epoch_day)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(pubkey);
         }
         

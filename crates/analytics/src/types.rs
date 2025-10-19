@@ -98,6 +98,12 @@ pub struct UserLanguages {
     pub languages: HashMap<LanguageCode, f32>,
 }
 
+impl Default for UserLanguages {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserLanguages {
     pub fn new() -> Self {
         Self {
