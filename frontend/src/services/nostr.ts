@@ -1,4 +1,4 @@
-import { NostrEvent, NostrProvider, MetricDataPoint, MetricType } from '../types';
+import { NostrEvent, MetricDataPoint, MetricType } from '../types';
 import { initWasm } from '../wasm/analytics';
 
 // Storage key for private key
@@ -197,7 +197,7 @@ export const publishToRelays = async (
           }, 2000);
         };
         
-        ws.onerror = (error) => {
+        ws.onerror = () => {
           clearTimeout(timeout);
           ws.close();
           reject(new Error(`WebSocket error: ${relayUrl}`));

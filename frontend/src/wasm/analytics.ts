@@ -32,10 +32,10 @@ async function fetchEventsFromRelay(
   filter: any,
   timeout: number = 30000
 ): Promise<any[]> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const events: any[] = [];
     const ws = new WebSocket(relay);
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
     
     const cleanup = () => {
       clearTimeout(timeoutId);

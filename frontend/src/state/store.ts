@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AnalyticsConfig, MetricType, MetricDataPoint } from '../types';
+import { AnalyticsConfig, MetricType } from '../types';
 
 interface AnalyticsState {
   // Configuration
