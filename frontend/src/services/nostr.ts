@@ -214,3 +214,157 @@ export const publishToRelays = async (
   await Promise.all(promises);
 };
 
+// Fetch published analytics results from relays
+export const fetchPublishedResults = async (
+  relays: string[],
+  filters: {
+    languages?: string[];
+    metrics?: string[];
+    since?: number;
+    until?: number;
+    authors?: string[];
+  } = {}
+): Promise<NostrEvent[]> => {
+  const results: NostrEvent[] = [];
+  const seenIds = new Set<string>();
+
+  const promises = relays.map(async (relayUrl) => {
+    return new Promise<void>((resolve) => {
+      const ws = new WebSocket(relayUrl);
+      let timeoutId: ReturnType<typeof setTimeout>;
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
+      };
+
+      timeoutId = setTimeout(() => {
+        console.log(`Timeout fetching from ${relayUrl}`);
+        cleanup();
+        resolve();
+      }, 30000);
+
+      ws.onopen = () => {
+        // Build filter for kind:30080
+        const filter: any = {
+          kinds: [30080]
+        };
+
+        if (filters.languages && filters.languages.length > 0) {
+          filter['#l'] = filters.languages;
+        }
+
+        // Note: Metric filtering is done client-side since relays don't support prefix matching on d tags
+
+        if (filters.since) {
+          filter.since = filters.since;
+        }
+
+        if (filters.until) {
+          filter.until = filters.until;
+        }
+
+        if (filters.authors && filters.authors.length > 0) {
+          filter.authors = filters.authors;
+        }
+
+        const subscriptionId = Math.random().toString(36).substring(7);
+        ws.send(JSON.stringify(['REQ', subscriptionId, filter]));
+
+        console.log(`Fetching published results from ${relayUrl}`, filter);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data[0] === 'EVENT' && data[2]) {
+            const nostrEvent = data[2];
+            
+            // Deduplicate by event ID
+            if (!seenIds.has(nostrEvent.id)) {
+              seenIds.add(nostrEvent.id);
+              
+              // Client-side filtering for metrics if needed
+              if (filters.metrics && filters.metrics.length > 0) {
+                const dTag = nostrEvent.tags.find((t: string[]) => t[0] === 'd')?.[1];
+                if (dTag) {
+                  const matchesMetric = filters.metrics.some(m => dTag.startsWith(`${m}-`));
+                  if (matchesMetric) {
+                    results.push(nostrEvent);
+                  }
+                }
+              } else {
+                results.push(nostrEvent);
+              }
+            }
+          } else if (data[0] === 'EOSE') {
+            cleanup();
+            resolve();
+          }
+        } catch (error) {
+          console.error(`Error parsing message from ${relayUrl}:`, error);
+        }
+      };
+
+      ws.onerror = () => {
+        console.error(`WebSocket error: ${relayUrl}`);
+        cleanup();
+        resolve();
+      };
+
+      ws.onclose = () => {
+        cleanup();
+        resolve();
+      };
+    });
+  });
+
+  await Promise.all(promises);
+  
+  console.log(`Fetched ${results.length} published results from ${relays.length} relay(s)`);
+  return results;
+};
+
+// Parse published analytics event
+export const parsePublishedResult = (event: NostrEvent): {
+  metric: string;
+  language: string;
+  relays: string[];
+  timeframe: {
+    start: number;
+    end: number;
+    granularity: string;
+    windowDays: number;
+  };
+  counts: [number, number][];
+  eligibleUserCount: number;
+  author: string;
+  publishedAt: number;
+} | null => {
+  try {
+    const content = JSON.parse(event.content);
+    const lTag = event.tags.find((t: string[]) => t[0] === 'l')?.[1];
+    const rTags = event.tags.filter((t: string[]) => t[0] === 'r').map((t: string[]) => t[1]);
+
+    const metric = content.metric || 'unknown';
+    const language = lTag || content.language || 'unknown';
+    const author = event.pubkey || 'unknown';
+    
+    return {
+      metric,
+      language,
+      relays: rTags.length > 0 ? rTags : (content.relays || []),
+      timeframe: content.timeframe || { start: 0, end: 0, granularity: 'day', windowDays: 1 },
+      counts: content.counts || [],
+      eligibleUserCount: content.eligibleUserCount || 0,
+      author,
+      publishedAt: event.created_at
+    };
+  } catch (error) {
+    console.error('Error parsing published result:', error);
+    return null;
+  }
+};
+

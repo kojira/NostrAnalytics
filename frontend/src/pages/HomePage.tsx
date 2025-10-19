@@ -8,6 +8,7 @@ import { MetricsChart } from '../components/MetricsChart';
 import { NostrPublisher } from '../components/NostrPublisher';
 import { PrivateKeyInput } from '../components/PrivateKeyInput';
 import { EventBrowser } from '../components/EventBrowser';
+import { PublishedResultsBrowser } from '../components/PublishedResultsBrowser';
 
 export const HomePage: React.FC = () => {
   return (
@@ -74,6 +75,16 @@ export const HomePage: React.FC = () => {
           marginBottom: '20px'
         }}>
           <EventBrowser />
+        </section>
+
+        <section style={{
+          backgroundColor: '#fff',
+          padding: '20px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          marginBottom: '20px'
+        }}>
+          <PublishedResultsBrowser />
         </section>
 
         <section style={{
