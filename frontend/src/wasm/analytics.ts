@@ -9,6 +9,32 @@ import type {
 
 let wasmModule: any = null;
 
+// WebSocket connection pool
+interface RelayConnection {
+  ws: WebSocket;
+  subscriptions: Map<string, { resolve: (events: any[]) => void; events: any[] }>;
+  isConnecting: boolean;
+  lastUsed: number;
+}
+
+const relayConnections = new Map<string, RelayConnection>();
+const CONNECTION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// Clean up old connections
+const cleanupOldConnections = () => {
+  const now = Date.now();
+  for (const [relay, conn] of relayConnections.entries()) {
+    if (now - conn.lastUsed > CONNECTION_TIMEOUT && conn.subscriptions.size === 0) {
+      console.log(`Closing idle connection to ${relay}`);
+      conn.ws.close();
+      relayConnections.delete(relay);
+    }
+  }
+};
+
+// Cleanup interval
+setInterval(cleanupOldConnections, 60 * 1000); // Check every minute
+
 export const initWasm = async (): Promise<void> => {
   if (wasmModule) {
     return;
@@ -26,56 +52,161 @@ export const initWasm = async (): Promise<void> => {
   }
 };
 
-// Fetch events from relay using WebSocket
-async function fetchEventsFromRelay(
-  relay: string,
-  filter: any,
-  timeout: number = 30000
-): Promise<any[]> {
-  return new Promise((resolve) => {
-    const events: any[] = [];
+// Close all relay connections
+export const closeAllRelayConnections = () => {
+  for (const [relay, conn] of relayConnections.entries()) {
+    console.log(`Closing connection to ${relay}`);
+    conn.ws.close();
+  }
+  relayConnections.clear();
+};
+
+// Get or create relay connection
+async function getRelayConnection(relay: string): Promise<RelayConnection> {
+  const existing = relayConnections.get(relay);
+  
+  if (existing && existing.ws.readyState === WebSocket.OPEN) {
+    existing.lastUsed = Date.now();
+    return existing;
+  }
+  
+  // Remove old connection if exists
+  if (existing) {
+    existing.ws.close();
+    relayConnections.delete(relay);
+  }
+  
+  // Create new connection
+  return new Promise((resolve, reject) => {
     const ws = new WebSocket(relay);
-    let timeoutId: ReturnType<typeof setTimeout>;
-    
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
+    const conn: RelayConnection = {
+      ws,
+      subscriptions: new Map(),
+      isConnecting: true,
+      lastUsed: Date.now()
     };
     
-    timeoutId = setTimeout(() => {
-      cleanup();
-      resolve(events); // Return partial results on timeout
-    }, timeout);
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error(`Connection timeout: ${relay}`));
+    }, 10000);
     
     ws.onopen = () => {
-      // Subscribe with filter
-      const subscription = ['REQ', 'sub-' + Date.now(), filter];
-      ws.send(JSON.stringify(subscription));
+      clearTimeout(timeout);
+      conn.isConnecting = false;
+      relayConnections.set(relay, conn);
+      console.log(`✓ Connected to ${relay}`);
+      resolve(conn);
     };
     
+    ws.onerror = (error) => {
+      clearTimeout(timeout);
+      console.error(`✗ Connection error: ${relay}`, error);
+      reject(error);
+    };
+    
+    // Handle incoming messages
     ws.onmessage = (msg) => {
       try {
         const data = JSON.parse(msg.data);
-        if (Array.isArray(data) && data[0] === 'EVENT') {
-          events.push(data[2]); // Event is at index 2
-        } else if (Array.isArray(data) && data[0] === 'EOSE') {
-          // End of stored events
-          cleanup();
-          resolve(events);
+        if (Array.isArray(data) && data[0] === 'EVENT' && data[1]) {
+          const subId = data[1];
+          const event = data[2];
+          const sub = conn.subscriptions.get(subId);
+          if (sub) {
+            sub.events.push(event);
+          }
+        } else if (Array.isArray(data) && data[0] === 'EOSE' && data[1]) {
+          const subId = data[1];
+          const sub = conn.subscriptions.get(subId);
+          if (sub) {
+            sub.resolve(sub.events);
+            conn.subscriptions.delete(subId);
+          }
         }
       } catch (e) {
         console.error('Failed to parse message:', e);
       }
     };
     
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      cleanup();
-      resolve(events); // Return partial results on error
+    ws.onclose = () => {
+      // Resolve all pending subscriptions with partial results
+      for (const sub of conn.subscriptions.values()) {
+        sub.resolve(sub.events);
+      }
+      conn.subscriptions.clear();
+      relayConnections.delete(relay);
+      console.log(`Connection closed: ${relay}`);
     };
   });
+}
+
+// Fetch events from relay using persistent WebSocket connection
+async function fetchEventsFromRelay(
+  relay: string,
+  filter: any,
+  timeout: number = 30000,
+  onProgress?: (fetched: number, status: string) => void
+): Promise<any[]> {
+  try {
+    onProgress?.(0, 'connecting');
+    const conn = await getRelayConnection(relay);
+    
+    return new Promise((resolve) => {
+      const subId = 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+      const events: any[] = [];
+      
+      // Register subscription
+      conn.subscriptions.set(subId, {
+        resolve: (finalEvents) => {
+          onProgress?.(finalEvents.length, 'completed');
+          clearTimeout(timeoutId);
+          resolve(finalEvents);
+        },
+        events
+      });
+      
+      const timeoutId = setTimeout(() => {
+        const sub = conn.subscriptions.get(subId);
+        if (sub) {
+          onProgress?.(sub.events.length, 'timeout');
+          sub.resolve(sub.events);
+          conn.subscriptions.delete(subId);
+        }
+      }, timeout);
+      
+      // Send subscription request
+      const subscription = ['REQ', subId, filter];
+      conn.ws.send(JSON.stringify(subscription));
+      onProgress?.(0, 'fetching');
+      
+      // Update progress periodically
+      const progressInterval = setInterval(() => {
+        const sub = conn.subscriptions.get(subId);
+        if (sub) {
+          onProgress?.(sub.events.length, 'fetching');
+        } else {
+          clearInterval(progressInterval);
+        }
+      }, 500);
+      
+      // Cleanup on completion
+      const originalResolve = conn.subscriptions.get(subId)?.resolve;
+      if (originalResolve) {
+        conn.subscriptions.set(subId, {
+          resolve: (finalEvents) => {
+            clearInterval(progressInterval);
+            originalResolve(finalEvents);
+          },
+          events
+        });
+      }
+    });
+  } catch (error) {
+    console.error(`Failed to fetch from ${relay}:`, error);
+    onProgress?.(0, 'error');
+    return [];
+  }
 }
 
 // Fetch events in chunks
@@ -84,14 +215,26 @@ async function fetchEventsChunked(
   since: number,
   until: number,
   kinds?: number[],
-  chunkSizeDays: number = 1
+  chunkSizeDays: number = 1,
+  onRelayProgress?: (relay: string, progress: number, status: string, fetched: number) => void
 ): Promise<any[]> {
   const allEvents: any[] = [];
   const seenIds = new Set<string>();
   const chunkSize = chunkSizeDays * 86400;
+  const totalPeriod = until - since;
+  const relayFetchedCounts = new Map<string, number>();
+  
+  // Initialize relay progress
+  relays.forEach(relay => {
+    relayFetchedCounts.set(relay, 0);
+    onRelayProgress?.(relay, 0, 'pending', 0);
+  });
+  
+  let processedPeriod = 0;
   
   for (let currentSince = since; currentSince < until; currentSince += chunkSize) {
     const currentUntil = Math.min(currentSince + chunkSize, until);
+    const currentChunkSize = currentUntil - currentSince;
     
     const filter: any = {
       since: currentSince,
@@ -103,8 +246,18 @@ async function fetchEventsChunked(
       filter.kinds = kinds;
     }
     
-    // Fetch from all relays in parallel
-    const promises = relays.map(relay => fetchEventsFromRelay(relay, filter));
+    // Fetch from all relays in parallel with progress tracking
+    const promises = relays.map(relay => 
+      fetchEventsFromRelay(relay, filter, 30000, (fetched, status) => {
+        const currentProgress = Math.round(((processedPeriod + currentChunkSize * 0.5) / totalPeriod) * 100);
+        const mappedStatus = status === 'connected' ? 'connecting' : 
+                            status === 'fetching' ? 'fetching' :
+                            status === 'completed' ? 'fetching' : // Keep fetching until all chunks done
+                            status === 'error' ? 'error' : 'pending';
+        const currentFetched = relayFetchedCounts.get(relay) || 0;
+        onRelayProgress?.(relay, currentProgress, mappedStatus, currentFetched + fetched);
+      })
+    );
     const results = await Promise.allSettled(promises);
     
     let chunkNewEvents = 0;
@@ -121,21 +274,41 @@ async function fetchEventsChunked(
             chunkNewEvents++;
           }
         }
+        const currentFetched = relayFetchedCounts.get(relay) || 0;
+        relayFetchedCounts.set(relay, currentFetched + result.value.length);
         console.log(`  ${relay}: ${result.value.length} events (${relayNewEvents} new, ${result.value.length - relayNewEvents} duplicates)`);
       } else {
         console.error(`  ${relay}: Failed -`, result.reason);
+        const currentFetched = relayFetchedCounts.get(relay) || 0;
+        onRelayProgress?.(relay, Math.round((processedPeriod / totalPeriod) * 100), 'error', currentFetched);
       }
     }
     
-    console.log(`Fetched chunk ${currentSince}-${currentUntil}: ${allEvents.length} events total (+${chunkNewEvents} new)`);
+    processedPeriod += currentChunkSize;
+    const overallProgress = Math.round((processedPeriod / totalPeriod) * 100);
+    
+    // Update progress for all relays
+    relays.forEach(relay => {
+      const fetched = relayFetchedCounts.get(relay) || 0;
+      onRelayProgress?.(relay, overallProgress, 'fetching', fetched);
+    });
+    
+    console.log(`Fetched chunk ${currentSince}-${currentUntil}: ${allEvents.length} events total (+${chunkNewEvents} new) [${overallProgress}%]`);
   }
+  
+  // Mark all relays as completed
+  relays.forEach(relay => {
+    const fetched = relayFetchedCounts.get(relay) || 0;
+    onRelayProgress?.(relay, 100, 'completed', fetched);
+  });
   
   return allEvents;
 }
 
 export const buildLanguageIndex = async (
   relays: string[],
-  options: LanguageIndexOptions
+  options: LanguageIndexOptions,
+  onRelayProgress?: (relay: string, progress: number, status: string, fetched: number) => void
 ): Promise<{ result: LanguageIndexResult; userLanguages: Record<string, Record<string, number>>; events: any[] }> => {
   if (!wasmModule) {
     await initWasm();
@@ -149,7 +322,8 @@ export const buildLanguageIndex = async (
     options.since,
     options.until,
     [1, 42], // kind:1 (notes) and kind:42 (channel messages) for language detection
-    1 // 1 day chunks
+    1, // 1 day chunks
+    onRelayProgress
   );
   
   console.log(`Fetched ${events.length} events for language detection`);

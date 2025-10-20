@@ -26,8 +26,11 @@ export const AnalysisControl: React.FC = () => {
     config,
     isAnalyzing,
     progress,
+    relayProgress,
     setAnalyzing,
     setProgress,
+    setRelayProgress,
+    clearRelayProgress,
     setResults,
     clearResults,
     setEvents
@@ -56,6 +59,7 @@ export const AnalysisControl: React.FC = () => {
 
       // Step 1: Build language index with incremental fetching
       setProgress({ stage: '言語インデックス構築中...', current: 0, total: 100 });
+      clearRelayProgress();
       
       // Find existing caches for the same relays (exact match required)
       const existingCaches = await findLanguageIndexByRelays(config.relays);
@@ -141,6 +145,8 @@ export const AnalysisControl: React.FC = () => {
               until: period.until,
               confThresh: 0.5,
               maxLangsPerUser: 5
+            }, (relay, progress, status, fetched) => {
+              setRelayProgress(relay, { status: status as any, progress, fetched });
             });
             
             // Merge user languages
@@ -181,6 +187,8 @@ export const AnalysisControl: React.FC = () => {
             until,
             confThresh: 0.5,
             maxLangsPerUser: 5
+          }, (relay, progress, status, fetched) => {
+            setRelayProgress(relay, { status: status as any, progress, fetched });
           });
           
           if (indexData.userLanguages instanceof Map) {
@@ -347,6 +355,68 @@ export const AnalysisControl: React.FC = () => {
           <div style={{ marginTop: '5px', fontSize: '14px' }}>
             {progress.current} / {progress.total}
           </div>
+        </div>
+      )}
+
+      {Object.keys(relayProgress).length > 0 && (
+        <div style={{
+          padding: '12px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          marginBottom: '10px'
+        }}>
+          <div style={{ marginBottom: '10px', fontWeight: 'bold' }}>リレー別進捗</div>
+          {Object.entries(relayProgress).map(([relay, info]) => {
+            const statusColor = 
+              info.status === 'completed' ? '#4caf50' :
+              info.status === 'error' ? '#f44336' :
+              info.status === 'fetching' ? '#2196f3' :
+              info.status === 'connecting' ? '#ff9800' : '#999';
+            
+            const statusText =
+              info.status === 'completed' ? '完了' :
+              info.status === 'error' ? 'エラー' :
+              info.status === 'fetching' ? '取得中' :
+              info.status === 'connecting' ? '接続中' : '待機中';
+
+            return (
+              <div key={relay} style={{ marginBottom: '8px' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '4px',
+                  fontSize: '13px'
+                }}>
+                  <span style={{ 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    maxWidth: '60%'
+                  }}>
+                    {relay}
+                  </span>
+                  <span style={{ color: statusColor, fontWeight: 'bold' }}>
+                    {statusText} {info.progress}% ({info.fetched.toLocaleString()}件)
+                  </span>
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: '8px',
+                  backgroundColor: '#e0e0e0',
+                  borderRadius: '4px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    width: `${info.progress}%`,
+                    height: '100%',
+                    backgroundColor: statusColor,
+                    transition: 'width 0.3s'
+                  }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

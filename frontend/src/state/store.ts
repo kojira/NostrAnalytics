@@ -17,8 +17,16 @@ interface AnalyticsState {
     current: number;
     total: number;
   } | null;
+  relayProgress: Record<string, {
+    status: 'pending' | 'connecting' | 'fetching' | 'completed' | 'error';
+    progress: number; // 0-100%
+    fetched: number;
+    message?: string;
+  }>;
   setAnalyzing: (analyzing: boolean) => void;
   setProgress: (progress: { stage: string; current: number; total: number } | null) => void;
+  setRelayProgress: (relay: string, progress: { status: 'pending' | 'connecting' | 'fetching' | 'completed' | 'error'; progress: number; fetched: number; message?: string }) => void;
+  clearRelayProgress: () => void;
   
   // Results (now supports language-keyed data)
   results: Record<string, any>;
@@ -72,8 +80,14 @@ export const useAnalyticsStore = create<AnalyticsState>()(
       // Analysis state
       isAnalyzing: false,
       progress: null,
+      relayProgress: {},
       setAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
       setProgress: (progress) => set({ progress }),
+      setRelayProgress: (relay, progress) =>
+        set((state) => ({
+          relayProgress: { ...state.relayProgress, [relay]: progress }
+        })),
+      clearRelayProgress: () => set({ relayProgress: {} }),
       
       // Results
       results: {},
