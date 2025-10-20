@@ -53,7 +53,11 @@ cargo clippy
 ### 2. WASMビルド
 
 ```bash
-# 手動ビルド
+# macOSの場合（LLVMが必要）
+cd crates/analytics
+CC=clang AR=llvm-ar wasm-pack build --target web --out-dir ../../frontend/src/wasm/pkg
+
+# Linuxの場合
 cd crates/analytics
 wasm-pack build --target web --out-dir ../../frontend/src/wasm/pkg
 
@@ -67,17 +71,43 @@ wasm-pack build --target web --out-dir ../../frontend/src/wasm/pkg
 cd frontend
 
 # 依存インストール
-npm install
+pnpm install
 
 # 開発サーバー起動
-npm run dev
+pnpm run dev
 
 # ビルド
-npm run build
+pnpm run build
 
 # Lint
-npm run lint
+pnpm run lint
 ```
+
+### 4. コミット前チェック（重要！）
+
+**コミット前に必ず実行してください:**
+
+```bash
+# プロジェクトルートで実行
+./scripts/pre-commit-check.sh
+```
+
+このスクリプトは以下をチェックします:
+- ✅ Rustのフォーマット (`cargo fmt`)
+- ✅ Clippyの警告 (`cargo clippy`)
+- ✅ Rustのテスト (`cargo test`)
+- ✅ WASMビルド (`wasm-pack build`)
+- ✅ フロントエンドビルド (`pnpm run build`)
+
+すべてのチェックが通ったら、コミット・プッシュできます:
+
+```bash
+git add -A
+git commit -m "your commit message"
+git push origin main
+```
+
+**注意**: このスクリプトを実行せずにコミットすると、GitHub ActionsのCIで失敗する可能性があります。
 
 ## ディレクトリ構造
 

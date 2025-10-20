@@ -43,23 +43,38 @@ cd NostrAnalytics
 # Rust依存のビルド確認
 cargo check
 
-# WASMビルド（今後実装）
-# cd crates/analytics
-# wasm-pack build --target web
+# WASMビルド
+cd crates/analytics
+CC=clang AR=llvm-ar wasm-pack build --target web --out-dir ../../frontend/src/wasm/pkg
 
 # フロントエンドの依存インストール
-cd frontend
-npm install
+cd ../../frontend
+pnpm install
 ```
 
 ### 開発サーバーの起動
 
 ```bash
 cd frontend
-npm run dev
+pnpm run dev
 ```
 
 ブラウザで `http://localhost:3000` を開きます。
+
+### コミット前チェック
+
+**開発時は、コミット前に必ずこのスクリプトを実行してください:**
+
+```bash
+./scripts/pre-commit-check.sh
+```
+
+このスクリプトは以下を自動チェックします:
+- Rustのフォーマット・Lint・テスト
+- WASMビルド
+- フロントエンドビルド
+
+すべて通ったらコミット可能です。
 
 ## 使い方
 
