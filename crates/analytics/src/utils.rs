@@ -10,10 +10,10 @@ pub fn set_panic_hook() {
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     pub fn log(s: &str);
-    
+
     #[wasm_bindgen(js_namespace = console)]
     pub fn error(s: &str);
-    
+
     #[wasm_bindgen(js_namespace = console)]
     pub fn warn(s: &str);
 }
@@ -40,4 +40,3 @@ macro_rules! console_warn {
 }
 
 pub(crate) use console_log;
-

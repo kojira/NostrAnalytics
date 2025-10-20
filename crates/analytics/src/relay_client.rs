@@ -19,11 +19,11 @@ impl NostrEvent {
     pub fn get_content(&self) -> &str {
         &self.content
     }
-    
+
     pub fn get_pubkey(&self) -> &str {
         &self.pubkey
     }
-    
+
     pub fn get_created_at(&self) -> Timestamp {
         self.created_at
     }

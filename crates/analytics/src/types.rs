@@ -23,14 +23,14 @@ pub type EpochDay = u32;
 pub struct LanguageIndexResult {
     /// Total number of unique users found
     pub users: u32,
-    
+
     /// Users per language
     #[wasm_bindgen(skip)]
     pub by_lang: HashMap<LanguageCode, u32>,
-    
+
     /// Total events processed
     pub events_processed: u32,
-    
+
     /// Events with detected language
     pub events_with_language: u32,
 }
@@ -48,16 +48,16 @@ impl LanguageIndexResult {
 pub struct LanguageIndexOptions {
     /// Start timestamp (Unix seconds)
     pub since: Timestamp,
-    
+
     /// End timestamp (Unix seconds)
     pub until: Timestamp,
-    
+
     /// Maximum events to process (optional)
     pub max_events: Option<u32>,
-    
+
     /// Confidence threshold (0.0-1.0, default 0.5)
     pub conf_thresh: Option<f32>,
-    
+
     /// Maximum languages per user (default 5)
     pub max_langs_per_user: Option<u8>,
 }
@@ -67,16 +67,16 @@ pub struct LanguageIndexOptions {
 pub struct MetricsOptions {
     /// Start timestamp (Unix seconds)
     pub since: Timestamp,
-    
+
     /// End timestamp (Unix seconds)
     pub until: Timestamp,
-    
+
     /// Target languages
     pub languages: Vec<LanguageCode>,
-    
+
     /// Granularity (currently only "day" supported)
     pub granularity: String,
-    
+
     /// Window size in days (1=DAU, 7=WAU, 30=MAU, 365=YAU)
     pub window_days: u16,
 }
@@ -86,7 +86,7 @@ pub struct MetricsOptions {
 pub struct MetricDataPoint {
     /// Epoch day
     pub epoch_day: EpochDay,
-    
+
     /// Count of active users
     pub count: u32,
 }
@@ -110,14 +110,14 @@ impl UserLanguages {
             languages: HashMap::new(),
         }
     }
-    
+
     pub fn add_language(&mut self, lang: LanguageCode, confidence: f32, max_langs: u8) {
         // Update or insert
         self.languages
             .entry(lang)
             .and_modify(|c| *c = c.max(confidence))
             .or_insert(confidence);
-        
+
         // Keep only top N languages
         if self.languages.len() > max_langs as usize {
             let mut langs: Vec<_> = self.languages.iter().collect();
@@ -129,7 +129,7 @@ impl UserLanguages {
                 .collect();
         }
     }
-    
+
     pub fn has_language(&self, lang: &str) -> bool {
         self.languages.contains_key(lang)
     }
@@ -140,10 +140,10 @@ impl UserLanguages {
 pub struct LanguageIndex {
     /// Map from pubkey to their languages
     pub user_languages: HashMap<PubkeyHex, UserLanguages>,
-    
+
     /// Timestamp when this index was built
     pub built_at: Timestamp,
-    
+
     /// Time range covered
     pub since: Timestamp,
     pub until: Timestamp,
@@ -158,12 +158,12 @@ impl LanguageIndex {
             until,
         }
     }
-    
+
     #[cfg(target_arch = "wasm32")]
     fn current_timestamp() -> Timestamp {
         (js_sys::Date::now() / 1000.0) as u64
     }
-    
+
     #[cfg(not(target_arch = "wasm32"))]
     fn current_timestamp() -> Timestamp {
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -172,7 +172,7 @@ impl LanguageIndex {
             .unwrap()
             .as_secs()
     }
-    
+
     pub fn get_users_for_language(&self, lang: &str) -> HashSet<PubkeyHex> {
         self.user_languages
             .iter()
@@ -191,4 +191,3 @@ pub fn timestamp_to_epoch_day(timestamp: Timestamp) -> EpochDay {
 pub fn epoch_day_to_timestamp(epoch_day: EpochDay) -> Timestamp {
     epoch_day as Timestamp * 86400
 }
-

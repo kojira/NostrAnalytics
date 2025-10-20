@@ -1,8 +1,8 @@
-use wasm_bindgen::prelude::*;
-use nostr::{Event, EventBuilder, Keys, Kind, PublicKey, Tag, Timestamp};
 use nostr::nips::nip19::ToBech32;
 use nostr::types::time::Instant;
+use nostr::{Event, EventBuilder, Keys, Kind, PublicKey, Tag, Timestamp};
 use serde::Serialize;
+use wasm_bindgen::prelude::*;
 
 /// キーペアの生成結果
 #[derive(Serialize)]
@@ -36,7 +36,7 @@ pub fn get_public_key(secret_key_hex: String) -> Result<String, JsValue> {
 pub fn get_event_hash(event_json: JsValue) -> Result<String, JsValue> {
     let event: Event = serde_wasm_bindgen::from_value(event_json)
         .map_err(|e| JsValue::from_str(&format!("Deserialization error: {}", e)))?;
-    
+
     Ok(event.id.to_hex())
 }
 
@@ -47,7 +47,9 @@ pub fn get_event_hash(event_json: JsValue) -> Result<String, JsValue> {
 pub fn get_signature(_event_json: JsValue, _secret_key_hex: String) -> Result<String, JsValue> {
     // rust-nostrの署名はasync関数なので、WASMから直接呼び出すのは困難
     // 代わりにnostr-toolsを使用することを推奨
-    Err(JsValue::from_str("Use nostr-tools for signing. rust-nostr signing requires async context."))
+    Err(JsValue::from_str(
+        "Use nostr-tools for signing. rust-nostr signing requires async context.",
+    ))
 }
 
 /// 公開鍵をnpub形式に変換
@@ -55,14 +57,16 @@ pub fn get_signature(_event_json: JsValue, _secret_key_hex: String) -> Result<St
 pub fn public_key_to_npub(hex_pubkey: String) -> Result<String, JsValue> {
     let pubkey = PublicKey::parse(&hex_pubkey)
         .map_err(|e| JsValue::from_str(&format!("Invalid public key: {}", e)))?;
-    pubkey.to_bech32().map_err(|e| JsValue::from_str(&format!("Bech32 encoding error: {}", e)))
+    pubkey
+        .to_bech32()
+        .map_err(|e| JsValue::from_str(&format!("Bech32 encoding error: {}", e)))
 }
 
 /// npub形式から公開鍵のhexに変換
 #[wasm_bindgen]
 pub fn npub_to_public_key(npub: String) -> Result<String, JsValue> {
-    let pubkey = PublicKey::parse(&npub)
-        .map_err(|e| JsValue::from_str(&format!("Invalid npub: {}", e)))?;
+    let pubkey =
+        PublicKey::parse(&npub).map_err(|e| JsValue::from_str(&format!("Invalid npub: {}", e)))?;
     Ok(pubkey.to_hex())
 }
 
@@ -130,4 +134,3 @@ pub fn verify_event_signature(event_json: JsValue) -> Result<bool, JsValue> {
 pub fn now() -> u64 {
     Timestamp::now().as_u64()
 }
-

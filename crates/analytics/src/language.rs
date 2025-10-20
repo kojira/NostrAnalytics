@@ -7,7 +7,7 @@ pub fn detect_language(text: &str) -> Result<Option<(String, f32)>, AnalyticsErr
     if text.trim().is_empty() {
         return Ok(None);
     }
-    
+
     match detect(text) {
         Some(info) => {
             let lang_code = lang_to_iso639_1(info.lang());
@@ -131,4 +131,3 @@ mod tests {
         }
     }
 }
-

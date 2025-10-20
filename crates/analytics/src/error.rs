@@ -36,4 +36,3 @@ impl From<serde_json::Error> for AnalyticsError {
         AnalyticsError::Serialization(err.to_string())
     }
 }
-
