@@ -1,5 +1,7 @@
 # Nostr Analytics
 
+🔗 **Live:** https://kojira.github.io/NostrAnalytics/
+
 Nostr上の言語別アクティブユーザー数（DAU/WAU/MAU/YAU）を計測・可視化するWebアプリケーションです。
 
 ## 特徴
