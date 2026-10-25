@@ -69,9 +69,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.23.4'
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Verify Node runtime and Brotli
+        run: |
+          node --input-type=module -e "import assert from 'node:assert/strict'; import { brotliCompressSync, brotliDecompressSync } from 'node:zlib'; assert.equal(process.versions.node, '22.23.4'); const input = Buffer.from('runtime smoke'); assert.deepEqual(brotliDecompressSync(brotliCompressSync(input)), input); console.log(process.version, process.execPath);"
       
       - name: Download WASM artifacts
         uses: actions/download-artifact@v4
