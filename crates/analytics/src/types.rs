@@ -19,7 +19,7 @@ pub type EpochDay = u32;
 
 /// Result of language index building
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 pub struct LanguageIndexResult {
     /// Total number of unique users found
     pub users: u32,
